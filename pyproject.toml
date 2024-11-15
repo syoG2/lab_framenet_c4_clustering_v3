@@ -1,0 +1,41 @@
+[project]
+name = "lab-framenet-c4-clustering-v2"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "datasets>=3.0.2",
+    "jupyter>=1.1.1",
+    "nltk>=3.9.1",
+    "omegaconf>=2.3.0",
+    "pydantic>=2.9.2",
+    "ruff>=0.7.0",
+    "scikit-learn>=1.5.2",
+    "setuptools>=75.2.0",
+    "spacy-alignments>=0.9.1",
+    "stanza>=1.9.2",
+    "timeout-decorator>=0.5.0",
+    "tqdm>=4.66.5",
+    "transformers>=4.46.1",
+    "wheel>=0.44.0",
+]
+
+[tool.uv]
+dev-dependencies = []
+[tool.ruff]
+select = [
+    "F", # Flake8
+    "B", # Black
+    "I", # isort
+    "E", # error
+    "W"  # warning
+]
+ignore = []
+fixable = ["ALL"]
+exclude = [
+    ".ruff_cache"
+]
+line-length = 130
+indent-width = 4
+target-version = "py310"
