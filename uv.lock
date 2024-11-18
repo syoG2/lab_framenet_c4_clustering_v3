@@ -501,6 +501,15 @@ http = [
 ]
 
 [[package]]
+name = "future"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a7/b2/4140c69c6a66432916b26158687e821ba631a4c9273c474343badf84d3ba/future-1.0.0.tar.gz", hash = "sha256:bd2968309307861edae1458a4f8a4f3598c03be43b97521076aebf5d94c07b05", size = 1228490 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/da/71/ae30dadffc90b9006d77af76b393cb9dfbfc9629f339fc1574a1c52e6806/future-1.0.0-py3-none-any.whl", hash = "sha256:929292d34f5872e70396626ef385ec22355a1fae8ad29e1a734c3e43f9fbc216", size = 491326 },
+]
+
+[[package]]
 name = "h11"
 version = "0.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -934,6 +943,7 @@ dependencies = [
     { name = "datasets" },
     { name = "jupyter" },
     { name = "nltk" },
+    { name = "normalize" },
     { name = "omegaconf" },
     { name = "pydantic" },
     { name = "ruff" },
@@ -952,6 +962,7 @@ requires-dist = [
     { name = "datasets", specifier = ">=3.0.2" },
     { name = "jupyter", specifier = ">=1.1.1" },
     { name = "nltk", specifier = ">=3.9.1" },
+    { name = "normalize", specifier = ">=2.1.0" },
     { name = "omegaconf", specifier = ">=2.3.0" },
     { name = "pydantic", specifier = ">=2.9.2" },
     { name = "ruff", specifier = ">=0.7.0" },
@@ -1175,6 +1186,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/3c/87/db8be88ad32c2d042420b6fd9ffd4a149f9a0d7f0e86b3f543be2eeeedd2/nltk-3.9.1.tar.gz", hash = "sha256:87d127bd3de4bd89a4f81265e5fa59cb1b199b27440175370f7417d2bc7ae868", size = 2904691 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4d/66/7d9e26593edda06e8cb531874633f7c2372279c3b0f46235539fe546df8b/nltk-3.9.1-py3-none-any.whl", hash = "sha256:4fa26829c5b00715afe3061398a8989dc643b92ce7dd93fb4585a70930d168a1", size = 1505442 },
+]
+
+[[package]]
+name = "normalize"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "future" },
+    { name = "richenum" },
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/15/1c/3f69a4988f1ad5e9649985717f3559b4b77df7fc14095d453ac9bf849779/normalize-2.1.0.tar.gz", hash = "sha256:ee406c5f0d04f02b271d815fc68393472313e58fd5cf865f17de1348c6800225", size = 85824 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ae/01/85693fde1bb608c674a76bba2febb6d9fba0bd52c19b694766c2e0e76592/normalize-2.1.0-py3-none-any.whl", hash = "sha256:81b5091acfdcc1c02e9dae856fccb2f0919fccd2659322b40aede4f0de46dc60", size = 103298 },
 ]
 
 [[package]]
@@ -1879,6 +1904,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/da/88/f270de456dd7d11dcc808abfa291ecdd3f45ff44e3b549ffa01b126464d0/rfc3986_validator-0.1.1.tar.gz", hash = "sha256:3d44bde7921b3b9ec3ae4e3adca370438eccebc676456449b145d533b240d055", size = 6760 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9e/51/17023c0f8f1869d8806b979a2bffa3f861f26a3f1a66b094288323fba52f/rfc3986_validator-0.1.1-py2.py3-none-any.whl", hash = "sha256:2f235c432ef459970b4306369336b9d5dbdda31b510ca1e327636e01f528bfa9", size = 4242 },
+]
+
+[[package]]
+name = "richenum"
+version = "2.0.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4e/6c/89e7e2afd05754dd2ed695a4da97ab033e642d17e04449623f74de07ab24/richenum-2.0.2.tar.gz", hash = "sha256:286b83be8779b6eac6c3586d904241321eb2f7b9b5c98a1e91bf42e8b3a28b85", size = 9258 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f3/55/b50e4b2b673476135cc2098edc37c36cc40eb7a2858de0a97a159571da2a/richenum-2.0.2-py2.py3-none-any.whl", hash = "sha256:60802c5d35713dc6bb767c62bb27bc4df09ac094c5b812e2cf9955041156eccf", size = 8144 },
 ]
 
 [[package]]
