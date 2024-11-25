@@ -41,11 +41,15 @@ class FramenetWordList(WordList):
 
 
 def get_target_word_idx(text: str, preprocessed_text: str, target: list[list[int]]) -> list[list[int]]:
+    # 文字レベルのindexを単語レベルに変更
+    # FrameNetのtargetは初めのindexの文字は含み、終わりのindexの文字は含まないが、単語レベルのindexに変更する時は初めのindexも終わりのindexも含める
     char_to_word, _ = get_alignments(list(text), preprocessed_text.split())
     return [[char_to_word[t[0]][0], char_to_word[t[1] - 1][0]] for t in target]
 
 
 def get_fe_word_idx(text: str, preprocessed_text: str, fe: list[list[list[int | str]] | dict]) -> list[list[int]]:
+    # 文字レベルのindexを単語レベルに変更
+    # FrameNetのtargetは初めのindexの文字は含み、終わりのindexの文字は含まないが、単語レベルのindexに変更する時は初めのindexも終わりのindexも含める
     char_to_word, _ = get_alignments(list(text), preprocessed_text.split())
     ret: list[list[list[int | str]] | dict] = [[], {}]
     ret[0] = [[char_to_word[f[0]][0], char_to_word[f[1] - 1][0], f[2]] for f in fe[0]]
@@ -83,12 +87,28 @@ def make_word_list(id_data: FramenetId, doc: list[list]) -> FramenetWordList:
     return ret
 
 
+def get_verb(doc: list[list]) -> str:
+    # lu_nameをstanzaにかけたものからrootを取得
+    for sentence in doc.sentences:
+        for word in sentence.words:
+            if word.deprel == "root":
+                return word.text
+
+
 def main():
     # OmegaConfを用いて実験設定を読み込む
     args = Args(**OmegaConf.from_cli())
     # outputディレクトリの作成
     args.output_exemplar_file.parent.mkdir(parents=True, exist_ok=True)
     args.output_wordlist_file.parent.mkdir(parents=True, exist_ok=True)
+
+    nlp = Pipeline(
+        "en",
+        processors="tokenize,mwt,pos,lemma,depparse",
+        use_gpu=True,
+        device=args.device,
+        pos_batch_size=9000,
+    )
 
     df = pd.read_json(args.input_file, lines=True)
     df = df[df["lu_name"].str.contains(r"\.v")]  # 動詞を抽出
@@ -104,12 +124,16 @@ def main():
         lambda row: get_fe_word_idx(row["text"], row["preprocessed_text"], row["fe"]), axis=1
     )  # feの位置を単語単位に変換
 
+    df["target_word"] = df["lu_name"].apply(
+        lambda x: x[:-2] if " " not in x else get_verb(nlp(x.replace(r"[\[|\(].+[\)|\]]", "")[:-2].strip()))
+    )  # target_wordを抽出
+
     preprocessed_exemplars: list[FramenetData] = [
         FramenetData(
             source=row["source"],
             id_data=FramenetId(id=row["id_data"]["id"]),
             text=row["text"],
-            target_word=row["lu_name"],
+            target_word=row["target_word"],
             preprocessed_text=row["preprocessed_text"],
             preprocessed_target_widx=row["preprocessed_target_widx"],
             frame_name=row["frame_name"],
@@ -121,18 +145,13 @@ def main():
         for _, row in df.iterrows()
     ]
 
-    nlp = Pipeline(
-        "en",
-        processors="tokenize,mwt,pos,lemma,depparse",
-        use_gpu=True,
-        device=args.device,
-        pos_batch_size=9000,
-    )
+    df_sentences = df.drop_duplicates(subset=["preprocessed_text"])
 
-    docs = [nlp(text) for text in tqdm(df["preprocessed_text"], desc="Processing texts with NLP")]
+    docs = [nlp(text) for text in tqdm(df_sentences["preprocessed_text"], desc="Processing texts with NLP")]
 
     word_lists: list[FramenetWordList] = [
-        make_word_list(FramenetId(id=row["id_data"]["id"]), doc) for doc, (_, row) in zip(docs, df.iterrows(), strict=True)
+        make_word_list(FramenetId(id=row["id_data"]["id"]), doc)
+        for doc, (_, row) in zip(docs, df_sentences.iterrows(), strict=True)
     ]
 
     with open(args.output_exemplar_file, "w") as f:
