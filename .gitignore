@@ -10,7 +10,7 @@ old_*
 configs/
 data/
 datasets/
-src/make_datasets/lu_classifier/models/
+src/make_datasets/*/models/
 old/
 playground/
 dump/
