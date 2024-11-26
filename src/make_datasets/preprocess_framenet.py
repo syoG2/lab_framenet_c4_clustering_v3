@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from unicodedata import normalize
 
@@ -9,6 +10,9 @@ from pydantic import BaseModel
 from spacy_alignments import get_alignments
 from stanza.pipeline.core import Pipeline
 from tqdm import tqdm
+
+# tqdmをpandasのapplyメソッドで使用できるように設定
+tqdm.pandas()
 
 
 class Args(BaseModel):
@@ -114,23 +118,34 @@ def main():
     df = pd.read_json(args.input_file, lines=True)
     df = df[df["lu_name"].str.contains(r"\.v")]  # 動詞を抽出
     df = df[
-        df["lu_name"].apply(lambda lu_name: len(lu_name.split())) == df["target"].apply(lambda target: len(target))
-    ]  # LUの単語数とtargetの単語数が一致するものを抽出
+        df["lu_name"].apply(lambda lu_name: len(re.sub(r"(\.v)|(\[.*?\])|(\(.*?\))", "", lu_name).split()))
+        == df["target"].apply(lambda target: len(target))
+    ]  # LUの単語数とtargetの単語数が一致するものを抽出(アノテーションミスと見られるものを省く)
 
-    df["preprocessed_text"] = df["text"].apply(lambda x: normalize("NFKC", x))  # Unicode正規化
-    df["preprocessed_target_widx"] = df.apply(
+    tqdm.pandas(desc="preprocessed_text")
+    df["preprocessed_text"] = df["text"].progress_apply(lambda x: normalize("NFKC", x))  # Unicode正規化
+
+    tqdm.pandas(desc="preprocessed_target_widx")
+    df["preprocessed_target_widx"] = df.progress_apply(
         lambda row: get_target_word_idx(row["text"], row["preprocessed_text"], row["target"]), axis=1
     )  # targetの位置を単語単位に変換
-    df["fe_widx"] = df.apply(
+
+    tqdm.pandas(desc="fe_widx")
+    df["fe_widx"] = df.progress_apply(
         lambda row: get_fe_word_idx(row["text"], row["preprocessed_text"], row["fe"]), axis=1
     )  # feの位置を単語単位に変換
 
-    df = df.drop_duplicates(subset=["preprocessed_text", "preprocessed_target_widx"])
+    tqdm.pandas(desc="target_word_idx")
+    df["target_word_idx"] = df["lu_name"].progress_apply(
+        lambda x: 0 if " " not in x else get_verb_idx(nlp(re.sub(r"[\[|\(].*?[\)|\]]|\.v", "", x).strip()))
+    )  # 注目する単語(動詞)の位置を取得
 
-    df["target_word_idx"] = df["lu_name"].apply(lambda x: get_verb_idx(nlp(x.replace(r"[\[|\(].+[\)|\]]", "")[:-2].strip())))
-    df["target_word"] = df.apply(
+    tqdm.pandas(desc="target_word")
+    df["target_word"] = df.progress_apply(
         lambda x: x["preprocessed_text"].split()[x["preprocessed_target_widx"][x["target_word_idx"]][0]], axis=1
-    )
+    )  # 注目する単語(動詞)を取得
+
+    df = df.drop_duplicates(subset=["preprocessed_text", "target_word_idx"])  # 重複を削除
 
     preprocessed_exemplars: list[FramenetData] = [
         FramenetData(
