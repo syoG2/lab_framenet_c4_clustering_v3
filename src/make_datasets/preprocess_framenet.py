@@ -24,6 +24,7 @@ class FramenetData(BaseData):
     id_data: FramenetId  # 元データの参照に必要な情報を格納
     # text: str  # 前処理前のtext
     # target_word: str  # 注目する語(基本形)
+    # target_word_idx: int  # 注目する語の位置(単語レベル)
     # preprocessed_text: str  # 前処理後のtext
     # preprocessed_target_widx: list[int]  # 前処理後のLUの位置(単語レベル)[開始位置,終了位置,主となる語の位置(構文木)]
     frame_name: str
@@ -44,7 +45,7 @@ def get_target_word_idx(text: str, preprocessed_text: str, target: list[list[int
     # 文字レベルのindexを単語レベルに変更
     # FrameNetのtargetは初めのindexの文字は含み、終わりのindexの文字は含まないが、単語レベルのindexに変更する時は初めのindexも終わりのindexも含める
     char_to_word, _ = get_alignments(list(text), preprocessed_text.split())
-    return [[char_to_word[t[0]][0], char_to_word[t[1] - 1][0]] for t in target]
+    return [[char_to_word[t[0]][0], char_to_word[t[1] - 1][-1]] for t in target]
 
 
 def get_fe_word_idx(text: str, preprocessed_text: str, fe: list[list[list[int | str]] | dict]) -> list[list[int]]:
@@ -52,7 +53,7 @@ def get_fe_word_idx(text: str, preprocessed_text: str, fe: list[list[list[int | 
     # FrameNetのtargetは初めのindexの文字は含み、終わりのindexの文字は含まないが、単語レベルのindexに変更する時は初めのindexも終わりのindexも含める
     char_to_word, _ = get_alignments(list(text), preprocessed_text.split())
     ret: list[list[list[int | str]] | dict] = [[], {}]
-    ret[0] = [[char_to_word[f[0]][0], char_to_word[f[1] - 1][0], f[2]] for f in fe[0]]
+    ret[0] = [[char_to_word[f[0]][0], char_to_word[f[1] - 1][-1], f[2]] for f in fe[0]]
     ret[1] = fe[1]
     return ret
 
@@ -87,12 +88,12 @@ def make_word_list(id_data: FramenetId, doc: list[list]) -> FramenetWordList:
     return ret
 
 
-def get_verb(doc: list[list]) -> str:
+def get_verb_idx(doc: list[list]) -> int:
     # lu_nameをstanzaにかけたものからrootを取得
     for sentence in doc.sentences:
         for word in sentence.words:
             if word.deprel == "root":
-                return word.text
+                return word.id - 1
 
 
 def main():
@@ -124,9 +125,12 @@ def main():
         lambda row: get_fe_word_idx(row["text"], row["preprocessed_text"], row["fe"]), axis=1
     )  # feの位置を単語単位に変換
 
-    df["target_word"] = df["lu_name"].apply(
-        lambda x: x[:-2] if " " not in x else get_verb(nlp(x.replace(r"[\[|\(].+[\)|\]]", "")[:-2].strip()))
-    )  # target_wordを抽出
+    df = df.drop_duplicates(subset=["preprocessed_text", "preprocessed_target_widx"])
+
+    df["target_word_idx"] = df["lu_name"].apply(lambda x: get_verb_idx(nlp(x.replace(r"[\[|\(].+[\)|\]]", "")[:-2].strip())))
+    df["target_word"] = df.apply(
+        lambda x: x["preprocessed_text"].split()[x["preprocessed_target_widx"][x["target_word_idx"]][0]], axis=1
+    )
 
     preprocessed_exemplars: list[FramenetData] = [
         FramenetData(
@@ -134,6 +138,7 @@ def main():
             id_data=FramenetId(id=row["id_data"]["id"]),
             text=row["text"],
             target_word=row["target_word"],
+            target_word_idx=row["target_word_idx"],
             preprocessed_text=row["preprocessed_text"],
             preprocessed_target_widx=row["preprocessed_target_widx"],
             frame_name=row["frame_name"],
