@@ -36,9 +36,9 @@ class Args(BaseModel):
         if self.input_file == Path(""):
             self.input_file = Path(f"./data/c4/{self.split_name}_{self.file_id:05}.jsonl")
         if self.output_exemplar_file == Path(""):
-            self.output_exemplar_file = output_dir / Path(f"exemplars_{self.part_id}.jsonl")
+            self.output_exemplar_file = output_dir / Path(f"exemplars_{self.part_id}_token.jsonl")
         if self.output_wordlist_file == Path(""):
-            self.output_wordlist_file = output_dir / Path(f"word_list_{self.part_id}.jsonl")
+            self.output_wordlist_file = output_dir / Path(f"word_list_{self.part_id}_token.jsonl")
         if self.model_path == Path(""):
             self.model_path = Path(f"./src/make_datasets/lu_classifier_token/models/{self.model_name}/best_model")
 
