@@ -46,7 +46,7 @@ def main():
     # データの分割
     train_size = int(len(df) * 0.8)
     test_size = int(len(df) * 0.1)
-    valid_size = int(len(df) * 0.1)
+    # valid_size = int(len(df) * 0.1)
 
     # データセットの作成
     train_dataset = Dataset.from_pandas(df[:train_size])
