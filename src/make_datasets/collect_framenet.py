@@ -58,6 +58,7 @@ def make_exemplars(exemplars: any) -> list[RawFramenetData]:
 def main():
     # OmegaConfを用いて実験設定を読み込む
     args: Args = Args(**OmegaConf.from_cli())
+    print(args)  # 引数を表示
 
     # outputディレクトリの作成
     args.output_file.parent.mkdir(parents=True, exist_ok=True)
