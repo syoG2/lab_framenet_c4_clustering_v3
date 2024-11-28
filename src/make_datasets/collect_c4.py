@@ -1,5 +1,4 @@
 from datetime import datetime
-from enum import Enum
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -10,11 +9,9 @@ from tqdm import tqdm
 from datasets import load_dataset
 
 
-
-
 class Args(BaseModel):
     file_id: int
-    split_name: str = "train" # "train" or "validation"
+    split_name: str = "train"  # "train" or "validation"
     output_file: Path = Path("")
 
     def model_post_init(self, __context):
@@ -41,6 +38,7 @@ class RawC4Data(BaseModel):
 def main():
     # OmegaConfを用いて実験設定を読み込む
     args = Args(**OmegaConf.from_cli())
+    print(args)  # 引数を表示
 
     # outputディレクトリの作成
     args.output_file.parent.mkdir(parents=True, exist_ok=True)
