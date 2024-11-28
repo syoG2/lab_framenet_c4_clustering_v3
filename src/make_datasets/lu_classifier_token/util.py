@@ -17,6 +17,7 @@ label2id = {"O": 0, "B-lu": 1}
 id2label = {v: k for k, v in label2id.items()}
 
 
+# TODO: token数が多すぎるdataを省くべきか?
 def preprocess_data(
     data: dict[str, Any],
     tokenizer: PreTrainedTokenizer,
