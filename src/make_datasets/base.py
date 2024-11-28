@@ -7,6 +7,7 @@ class BaseData(BaseModel):
     source: str  # データの取得元(e.g. framenet)
     id_data: object  # 元データの参照に必要な情報を格納
     target_word: str  # 注目する語(基本形)
+    target_word_idx: int  # 注目する語の位置(単語レベル)
     preprocessed_text: str  # 前処理後のtext
     preprocessed_target_widx: list[list[int]]  # 前処理後のLUの位置(単語レベル)[開始位置,終了位置,主となる語の位置(構文木)]
     text: str  # 前処理前のtext
