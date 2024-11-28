@@ -8,6 +8,7 @@ from collect_c4 import C4Id
 from lu_classifier.util import extract_entities, id2label, label2id, preprocess_data, run_prediction
 from omegaconf import OmegaConf
 from pydantic import BaseModel
+from spacy_alignments import get_alignments
 from timeout_decorator import timeout
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -15,9 +16,10 @@ from transformers import AutoModelForTokenClassification, AutoTokenizer, DataCol
 
 from datasets import Dataset
 
+# tqdmをpandasのapplyメソッドで使用できるように設定
+tqdm.pandas()
 
-# TODO:引数の初期値の見直し
-# TODO:入力された引数をterminalに表示するようにする
+
 class Args(BaseModel):
     input_file: Path = Path("")
     file_id: int = 0  # input_fileが指定されている場合は無視される
@@ -41,6 +43,22 @@ class Args(BaseModel):
             self.model_path = Path(f"./src/make_datasets/lu_classifier/models/{self.model_name}/best_model")
 
 
+def get_pred_lu_name(words, doc_sentence, preprocessed_target_widx):
+    # 前処理後のtextのsplit()とdoc_sentence.wordsの対応を取る必要がある
+    doc_words = [word.text for word in doc_sentence.words]
+    word_to_doc, _ = get_alignments(words, doc_words)
+    return " ".join([doc_sentence.words[word_to_doc[idx[0]][0]].lemma for idx in preprocessed_target_widx]) + ".v"
+
+
+def get_target_word_idxs(words, doc_sentence):
+    # df["target_word"] = df["doc_sentence"].apply(lambda x: [word.lemma for word in x.words if word.upos == "VERB"])
+    # doc_sentence.wordsからVERBを見つけて、その位置のリストを返す
+    # 前処理後のtextのsplit()とdoc_sentence.wordsの対応を取る必要がある
+    doc_words = [word.text for word in doc_sentence.words]
+    _, doc_to_word = get_alignments(words, doc_words)
+    return [doc_to_word[word.id - 1][0] for word in doc_sentence.words if word.upos == "VERB"]
+
+
 class C4Data(BaseData):
     # source: str  # データの取得元(e.g. framenet)
     id_data: C4Id  # 元データの参照に必要な情報を格納
@@ -58,31 +76,29 @@ class C4WordList(WordList):
     # words: list[WordInfo]
 
 
-def make_word_list(id_data: C4Id, doc: list[list]) -> WordList:
+def make_word_list(id_data: C4Id, doc_sentence: list[list], sequence_number: int) -> WordList:
     # 構文解析の結果を整理して返す
     ret: C4WordList = C4WordList(id_data=id_data, words=[])
-    for sent_id, sentence in enumerate(doc.sentences):
-        for word in sentence.words:
-            try:
-                word_info: WordInfo = WordInfo(
-                    id=len(ret.words),  # 複数sentence全体の連番に変更
-                    text=word.text,
-                    lemma=word.lemma,
-                    upos=word.upos,
-                    xpos=word.xpos,
-                    feats=word.feats,
-                    head=len(ret.words) + (word.head - word.id) if word.head != 0 else -1,  # idの変更に合わせる
-                    deprel=word.deprel,
-                    start_char=word.start_char,
-                    end_char=word.end_char,
-                    children=[],
-                    word_idx=word.id - 1,
-                    sent_id=sent_id,
-                )
-                ret.words.append(word_info)
-            except KeyError as e:
-                print(f"key:'{e}'が存在しません。")
-
+    for word in doc_sentence:
+        try:
+            word_info: WordInfo = WordInfo(
+                id=len(ret.words),  # 複数sentence全体の連番に変更
+                text=word.text,
+                lemma=word.lemma,
+                upos=word.upos,
+                xpos=word.xpos,
+                feats=word.feats,
+                head=len(ret.words) + (word.head - word.id) if word.head != 0 else -1,  # idの変更に合わせる
+                deprel=word.deprel,
+                start_char=word.start_char,
+                end_char=word.end_char,
+                children=[],
+                word_idx=word.id - 1,
+                sent_id=sequence_number,
+            )
+            ret.words.append(word_info)
+        except KeyError as e:
+            print(f"key:'{e}'が存在しません。")
     for word_info in ret.words:
         ret.words[word_info.head].children.append(word_info.id)  # childrenを作成
     return ret
@@ -96,6 +112,7 @@ def nlp_with_timeout(nlp, text):  # nlp(text)のタイムアウトを設定
 def main():
     # OmegaConfを用いて実験設定を読み込む
     args = Args(**OmegaConf.from_cli())
+    print(args)  # 引数を表示
     # outputディレクトリの作成
     args.output_exemplar_file.parent.mkdir(parents=True, exist_ok=True)
     args.output_wordlist_file.parent.mkdir(parents=True, exist_ok=True)
@@ -115,15 +132,34 @@ def main():
     df = pd.read_json(args.input_file, lines=True)
     df = df[args.part_id * 1000 : min((args.part_id + 1) * 1000, len(df))]
 
-    df["normalize_text"] = df["text"].apply(lambda x: normalize("NFKC", x))  # Unicode正規化
+    tqdm.pandas(desc="normalize_text")
+    df["normalize_text"] = df["text"].progress_apply(lambda x: normalize("NFKC", x))  # Unicode正規化
 
-    df["doc_sentence"] = df["normalize_text"].apply(lambda x: [sentence for sentence in nlp(x).sentences])
+    tqdm.pandas(desc="doc_sentence")
+    df["doc_sentence"] = df["normalize_text"].progress_apply(
+        lambda x: [(seq_id, sentence) for seq_id, sentence in enumerate(nlp(x).sentences)]
+    )
     df = df.explode("doc_sentence")
-    df["preprocessed_text"] = df["doc_sentence"].apply(lambda x: x.text)
-    df = df[df["preprocessed_text"].apply(lambda x: len(tokenizer(x)["input_ids"]) <= tokenizer.model_max_length)]
-    df["target_word"] = df["doc_sentence"].apply(lambda x: [word.lemma for word in x.words if word.upos == "VERB"])
-    df = df.explode("target_word")
-    df = df.dropna(subset=["target_word"])
+    # 連番をつける
+    df["sequence_number"] = df["doc_sentence"].apply(lambda x: x[0])
+    df["doc_sentence"] = df["doc_sentence"].apply(lambda x: x[1])
+
+    tqdm.pandas(desc="preprocessed_text")
+    df["preprocessed_text"] = df["doc_sentence"].progress_apply(lambda x: x.text)
+    tqdm.pandas(desc="token_length")
+    df = df[df["preprocessed_text"].progress_apply(lambda x: len(tokenizer(x)["input_ids"]) <= tokenizer.model_max_length)]
+
+    # TODO: target_word_idxの作成
+    tqdm.pandas(desc="target_word_idx")
+    df["target_word_idx"] = df.progress_apply(
+        lambda row: get_target_word_idxs(row["preprocessed_text"].split(), row["doc_sentence"]), axis=1
+    )
+    df = df.explode("target_word_idx")
+    df = df.dropna(subset=["target_word_idx"])
+
+    tqdm.pandas(desc="target_word")
+    df["target_word"] = df.progress_apply(lambda row: row["preprocessed_text"].split()[row["target_word_idx"]], axis=1)
+    # df = df.dropna(subset=["target_word"])
     # df["preprocessed_target_widx"] = [[0, 0] for _ in range(len(df))]
 
     dataset = Dataset.from_pandas(df[["target_word", "preprocessed_text"]])
@@ -140,68 +176,22 @@ def main():
     )
 
     predictions = run_prediction(dataloader, model)
+    print(predictions[:3])
     results = extract_entities(predictions, dataset, tokenizer, id2label)
-    df["preprocessed_target_widx"] = pd.Series([result["pred_target_widx"] for result in results])
-    df["pred_lu_name"] = df.apply(
-        lambda x: " ".join([x["doc_sentence"].words[idx[0]].lemma for idx in x["preprocessed_target_widx"]]) + ".v", axis=1
+    df["preprocessed_target_widx"] = [result["pred_target_widx"] for result in results]
+
+    tqdm.pandas(desc="pred_lu_name")
+    df["pred_lu_name"] = df.progress_apply(
+        lambda row: get_pred_lu_name(row["preprocessed_text"].split(), row["doc_sentence"], row["preprocessed_target_widx"]),
+        axis=1,
     )
-
-    # exemplars: list[RawC4Data] = []
-    # with open(args.input_file, "r") as f:
-    #     exemplars = [RawC4Data.model_validate_json(line) for line in f]
-    #     exemplars = exemplars[args.part_id * 1000 : min((args.part_id + 1) * 1000, len(exemplars))]
-
-    # preprocessed_exemplars: list[C4Data] = []
-    # preprocessed_word_lists: list[C4WordList] = []  # 一文ごとのword_list
-
-    # with tqdm(exemplars) as pbar:
-    #     pbar.set_description("[preprocessed]")
-    #     for exemplar in pbar:
-    #         cleaned_text: str = clean_text(exemplar.text)
-    #         # doc: list = nlp(cleaned_text)
-    #         try:
-    #             doc = nlp_with_timeout(nlp, cleaned_text)
-    #         except TimeoutError:
-    #             print(f"timeout: {exemplar.id_data}")
-    #             continue
-
-    #         word_list: C4WordList = make_word_list(exemplar.id_data, doc)
-
-    #         # c4のデータは複数文が含まれるため、文ごとに分割して処理する
-    #         separate_idxes: list[int] = [0]  # 文ごとの境目のindex
-    #         for i in range(1, len(word_list.words)):
-    #             if word_list.words[i - 1].sent_id != word_list.words[i].sent_id:
-    #                 separate_idxes.append(i)
-    #         separate_idxes.append(-1)
-
-    #         for i in range(1, len(separate_idxes)):
-    #             # c4のデータは複数文が含まれるため、文ごとに分割して処理する
-    #             words: list[WordInfo] = word_list.words[separate_idxes[i - 1] : separate_idxes[i]]
-    #             for word_info in words:
-    #                 if word_info.upos == "VERB":
-    #                     data: C4Data = C4Data(
-    #                         source=exemplar.source,
-    #                         id_data=exemplar.id_data,
-    #                         target_word=word_info.lemma,
-    #                         text=exemplar.text,  # 前処理前の文として分割前の文を格納
-    #                         preprocessed_text=" ".join([word.text for word in words]),
-    #                         preprocessed_target_widx=[
-    #                             word_info.word_idx,
-    #                             word_info.word_idx,
-    #                             word_info.word_idx,
-    #                         ],  # TODO: どこまでを動詞句とするか
-    #                         part_id=args.part_id,
-    #                     )
-    #                     preprocessed_exemplars.append(data)
-
-    #             one_sentence_word_list: C4WordList = C4WordList(id_data=exemplar.id_data, words=words)
-    #             preprocessed_word_lists.append(one_sentence_word_list)
 
     preprocessed_exemplars: list[C4Data] = [
         C4Data(
             source=row["source"],
             id_data=C4Id(**row["id_data"]),
             target_word=row["target_word"],
+            target_word_idx=row["target_word_idx"],
             text=row["text"],
             preprocessed_text=row["preprocessed_text"],
             preprocessed_target_widx=row["preprocessed_target_widx"],
@@ -217,11 +207,16 @@ def main():
             for exemplar in pbar:
                 print(exemplar.model_dump_json(), file=f)
 
-    # with open(args.output_wordlist_file, "w") as f:
-    #     with tqdm(preprocessed_word_lists) as pbar:
-    #         pbar.set_description("[write word_list]")
-    #         for word_list in pbar:
-    #             print(word_list.model_dump_json(), file=f)
+    df = df.drop_duplicates(subset=["preprocessed_text"])  # 重複を削除
+    preprocessed_word_lists: list[C4WordList] = [
+        make_word_list(C4Id(**row["id_data"]), row["preprocessed_text"], row["sequence_number"]) for _, row in df.iterrows()
+    ]
+    # TODO: word_listの出力
+    with open(args.output_wordlist_file, "w") as f:
+        with tqdm(preprocessed_word_lists) as pbar:
+            pbar.set_description("[write word_list]")
+            for word_list in pbar:
+                print(word_list.model_dump_json(), file=f)
 
 
 if __name__ == "__main__":
