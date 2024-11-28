@@ -59,6 +59,15 @@ def main():
     # カスタムトークン[unused0]を追加
     tokenizer.add_special_tokens({"additional_special_tokens": [tokenizer.convert_ids_to_tokens(1)]})
 
+    model = AutoModelForTokenClassification.from_pretrained(args.pretrained_model, label2id=label2id, id2label=id2label)
+    # モデルのエンベディング層をリサイズ
+    model.resize_token_embeddings(len(tokenizer))
+
+    for param in model.parameters():
+        param.data = param.data.contiguous()
+
+    data_collator = DataCollatorForTokenClassification(tokenizer)
+
     # 訓練セットに対して前処理を行う
     train_dataset = dataset["train"].map(
         preprocess_data,
@@ -68,6 +77,7 @@ def main():
         },
         remove_columns=dataset["train"].column_names,
     )
+
     # 検証セットに対して前処理を行う
     validation_dataset = dataset["validation"].map(
         preprocess_data,
@@ -77,13 +87,6 @@ def main():
         },
         remove_columns=dataset["validation"].column_names,
     )
-
-    model = AutoModelForTokenClassification.from_pretrained(args.pretrained_model, label2id=label2id, id2label=id2label)
-
-    for param in model.parameters():
-        param.data = param.data.contiguous()
-
-    data_collator = DataCollatorForTokenClassification(tokenizer)
 
     # Trainerに渡す引数を初期化する
     training_args = TrainingArguments(
@@ -163,6 +166,7 @@ def main():
     predictions = run_prediction(test_dataloader, best_model)
     # 固有表現を抽出する
     results = extract_entities(predictions, dataset["test"], tokenizer, id2label)
+
     # 正解データと予測データのラベルのlistを作成する
     true_labels, pred_labels = convert_results_to_labels(results)
     # 評価結果を出力する
