@@ -103,6 +103,7 @@ def get_verb_idx(doc: list[list]) -> int:
 def main():
     # OmegaConfを用いて実験設定を読み込む
     args = Args(**OmegaConf.from_cli())
+    print(args)  # 引数を表示
     # outputディレクトリの作成
     args.output_exemplar_file.parent.mkdir(parents=True, exist_ok=True)
     args.output_wordlist_file.parent.mkdir(parents=True, exist_ok=True)
@@ -136,13 +137,18 @@ def main():
     )  # feの位置を単語単位に変換
 
     tqdm.pandas(desc="target_word_idx")
-    df["target_word_idx"] = df["lu_name"].progress_apply(
-        lambda x: 0 if " " not in x else get_verb_idx(nlp(re.sub(r"[\[|\(].*?[\)|\]]|\.v", "", x).strip()))
+    df["target_word_idx"] = df.progress_apply(
+        lambda row: row["preprocessed_target_widx"][0][0]
+        if " " not in row["lu_name"]
+        else row["preprocessed_target_widx"][get_verb_idx(nlp(re.sub(r"(\.v)|(\[.*?\])|(\(.*?\))", "", row["lu_name"]).strip()))][
+            0
+        ],
+        axis=1,
     )  # 注目する単語(動詞)の位置を取得
 
     tqdm.pandas(desc="target_word")
     df["target_word"] = df.progress_apply(
-        lambda x: x["preprocessed_text"].split()[x["preprocessed_target_widx"][x["target_word_idx"]][0]], axis=1
+        lambda x: x["preprocessed_text"].split()[x["target_word_idx"]], axis=1
     )  # 注目する単語(動詞)を取得
 
     df = df.drop_duplicates(subset=["preprocessed_text", "target_word_idx"])  # 重複を削除
