@@ -30,6 +30,7 @@ class Args(BaseModel):
     device: str = "cuda:0"
     model_name: str = "bert-base-uncased"
     model_path: Path = Path("")
+    tokenizer_path: Path = Path("")
 
     def model_post_init(self, __context):
         output_dir: Path = Path(f"./datasets/c4/{self.split_name}_{self.file_id:05}")
@@ -41,6 +42,8 @@ class Args(BaseModel):
             self.output_wordlist_file = output_dir / Path(f"word_list_{self.part_id}.jsonl")
         if self.model_path == Path(""):
             self.model_path = Path(f"./src/make_datasets/lu_classifier/models/{self.model_name}/best_model")
+        if self.tokenizer_path == Path(""):
+            self.tokenizer_path = Path(f"./src/make_datasets/lu_classifier/models/{self.model_name}/tokenizer")
 
 
 def get_pred_lu_name(words, doc_sentence, preprocessed_target_widx):
@@ -79,7 +82,7 @@ class C4WordList(WordList):
 def make_word_list(id_data: C4Id, doc_sentence: list[list], sequence_number: int) -> WordList:
     # 構文解析の結果を整理して返す
     ret: C4WordList = C4WordList(id_data=id_data, words=[])
-    for word in doc_sentence:
+    for word in doc_sentence.words:
         try:
             word_info: WordInfo = WordInfo(
                 id=len(ret.words),  # 複数sentence全体の連番に変更
@@ -125,7 +128,7 @@ def main():
         pos_batch_size=3000,
     )
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+    tokenizer = AutoTokenizer.from_pretrained(str(args.tokenizer_path))
     model = AutoModelForTokenClassification.from_pretrained(str(args.model_path))
     data_collator = DataCollatorForTokenClassification(tokenizer)
 
@@ -149,7 +152,6 @@ def main():
     tqdm.pandas(desc="token_length")
     df = df[df["preprocessed_text"].progress_apply(lambda x: len(tokenizer(x)["input_ids"]) <= tokenizer.model_max_length)]
 
-    # TODO: target_word_idxの作成
     tqdm.pandas(desc="target_word_idx")
     df["target_word_idx"] = df.progress_apply(
         lambda row: get_target_word_idxs(row["preprocessed_text"].split(), row["doc_sentence"]), axis=1
@@ -176,7 +178,6 @@ def main():
     )
 
     predictions = run_prediction(dataloader, model)
-    print(predictions[:3])
     results = extract_entities(predictions, dataset, tokenizer, id2label)
     df["preprocessed_target_widx"] = [result["pred_target_widx"] for result in results]
 
@@ -209,9 +210,9 @@ def main():
 
     df = df.drop_duplicates(subset=["preprocessed_text"])  # 重複を削除
     preprocessed_word_lists: list[C4WordList] = [
-        make_word_list(C4Id(**row["id_data"]), row["preprocessed_text"], row["sequence_number"]) for _, row in df.iterrows()
+        make_word_list(C4Id(**row["id_data"]), row["doc_sentence"], row["sequence_number"]) for _, row in df.iterrows()
     ]
-    # TODO: word_listの出力
+
     with open(args.output_wordlist_file, "w") as f:
         with tqdm(preprocessed_word_lists) as pbar:
             pbar.set_description("[write word_list]")

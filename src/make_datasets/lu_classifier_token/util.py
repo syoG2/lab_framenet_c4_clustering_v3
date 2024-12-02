@@ -106,7 +106,7 @@ def extract_entities(
         all_tokens = tokenizer.convert_ids_to_tokens(prediction["input_ids"])
         for token, label_id in zip(all_tokens, prediction["pred_label_ids"], strict=True):
             # 特殊トークン以外をlistに追加する
-            if token not in tokenizer.all_special_tokens and label_id != 1:
+            if token not in tokenizer.all_special_tokens:
                 tokens.append(token)
                 pred_labels.append(id2label[label_id])
 

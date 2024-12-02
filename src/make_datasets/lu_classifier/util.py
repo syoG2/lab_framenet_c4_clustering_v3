@@ -122,12 +122,11 @@ def extract_entities(
                 for id in idxs:
                     if pred_entities == [] or pred_entities[-1][-1] != id:
                         pred_entities.append([id, id])
-                    if id > len(words):
-                        # TODO: このエラー処理が発生しているか確認
-                        print(f"Error: {id} > {len(words)}")
-                        print(words)
-                        print(all_tokens)
-                        print(pred_labels)
+                    # if id > len(words):
+                    #     print(f"Error: {id} > {len(words)}")
+                    #     print(words)
+                    #     print(all_tokens)
+                    #     print(pred_labels)
 
         data["pred_target_widx"] = pred_entities
         results.append(data)
