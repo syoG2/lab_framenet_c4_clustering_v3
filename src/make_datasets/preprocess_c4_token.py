@@ -46,20 +46,26 @@ class Args(BaseModel):
             self.tokenizer_path = Path(f"./src/make_datasets/lu_classifier_token/models/{self.model_name}/tokenizer")
 
 
-def get_pred_lu_name(words, doc_sentence, preprocessed_target_widx):
+def get_pred_lu_name(preprocessed_text, doc_sentence, pred_lu_idx):
     # 前処理後のtextのsplit()とdoc_sentence.wordsの対応を取る必要がある
     doc_words = [word.text for word in doc_sentence.words]
-    word_to_doc, _ = get_alignments(words, doc_words)
-    return " ".join([doc_sentence.words[word_to_doc[idx[0]][0]].lemma for idx in preprocessed_target_widx]) + ".v"
+    char_to_word, _ = get_alignments(list(preprocessed_text), doc_words)
+    return (
+        " ".join(
+            [
+                doc_sentence.words[i].lemma
+                for idx in pred_lu_idx
+                for i in range(char_to_word[idx[0]][0], char_to_word[idx[-1] - 1][-1] + 1)
+            ]
+        )
+        + ".v"
+    )
 
 
-def get_target_word_idxs(words, doc_sentence):
-    # df["target_word"] = df["doc_sentence"].apply(lambda x: [word.lemma for word in x.words if word.upos == "VERB"])
-    # doc_sentence.wordsからVERBを見つけて、その位置のリストを返す
-    # 前処理後のtextのsplit()とdoc_sentence.wordsの対応を取る必要がある
+def get_target_word_idxs(preprocessed_text, doc_sentence):
     doc_words = [word.text for word in doc_sentence.words]
-    _, doc_to_word = get_alignments(words, doc_words)
-    return [doc_to_word[word.id - 1][0] for word in doc_sentence.words if word.upos == "VERB"]
+    _, doc_to_char = get_alignments(list(preprocessed_text), doc_words)
+    return [[doc_to_char[word.id - 1][0], doc_to_char[word.id - 1][-1] + 1] for word in doc_sentence.words if word.upos == "VERB"]
 
 
 class C4Data(BaseData):
@@ -143,25 +149,32 @@ def main():
     df["doc_sentence"] = df["normalize_text"].progress_apply(
         lambda x: [(seq_id, sentence) for seq_id, sentence in enumerate(nlp(x).sentences)]
     )
+
     df = df.explode("doc_sentence", True)
     # 連番をつける
     df["sequence_number"] = df["doc_sentence"].apply(lambda x: x[0])
     df["doc_sentence"] = df["doc_sentence"].apply(lambda x: x[1])
 
     tqdm.pandas(desc="preprocessed_text")
-    df["preprocessed_text"] = df["doc_sentence"].progress_apply(lambda x: x.text)
+    df["preprocessed_text"] = df["doc_sentence"].progress_apply(
+        lambda x: " ".join([word.text for word in x.words])
+        + " "  # 末尾に空白を追加しないと[,,,"a"," "]と[,,,," ","a"]のアラインメントをとる時におかしくなる)
+    )
+
     tqdm.pandas(desc="token_length")
     df = df[df["preprocessed_text"].progress_apply(lambda x: len(tokenizer(x)["input_ids"]) <= tokenizer.model_max_length)]
 
     tqdm.pandas(desc="target_word_idx")
     df["target_word_idx"] = df.progress_apply(
-        lambda row: get_target_word_idxs(row["preprocessed_text"].split(), row["doc_sentence"]), axis=1
+        lambda row: get_target_word_idxs(row["preprocessed_text"], row["doc_sentence"]), axis=1
     )
     df = df.explode("target_word_idx", True)
     df = df.dropna(subset=["target_word_idx"])
 
     tqdm.pandas(desc="target_word")
-    df["target_word"] = df.progress_apply(lambda row: row["preprocessed_text"].split()[row["target_word_idx"]], axis=1)
+    df["target_word"] = df.progress_apply(
+        lambda row: row["preprocessed_text"][row["target_word_idx"][0] : row["target_word_idx"][-1]], axis=1
+    )
     # df = df.dropna(subset=["target_word"])
     # df["preprocessed_target_widx"] = [[0, 0] for _ in range(len(df))]
 
@@ -179,12 +192,13 @@ def main():
     )
 
     predictions = run_prediction(dataloader, model)
+
     results = extract_entities(predictions, dataset, tokenizer, id2label)
-    df["preprocessed_target_widx"] = [result["pred_target_widx"] for result in results]
+    df["pred_lu_idx"] = [result["pred_lu_idx"] for result in results]
 
     tqdm.pandas(desc="pred_lu_name")
     df["pred_lu_name"] = df.progress_apply(
-        lambda row: get_pred_lu_name(row["preprocessed_text"].split(), row["doc_sentence"], row["preprocessed_target_widx"]),
+        lambda row: get_pred_lu_name(row["preprocessed_text"], row["doc_sentence"], row["pred_lu_idx"]),
         axis=1,
     )
 
@@ -196,7 +210,7 @@ def main():
             target_word_idx=row["target_word_idx"],
             text=row["text"],
             preprocessed_text=row["preprocessed_text"],
-            preprocessed_target_widx=row["preprocessed_target_widx"],
+            preprocessed_lu_idx=row["pred_lu_idx"],
             part_id=args.part_id,
             pred_lu_name=row["pred_lu_name"],
         )
@@ -209,7 +223,7 @@ def main():
             for exemplar in pbar:
                 print(exemplar.model_dump_json(), file=f)
 
-    df = df.drop_duplicates(subset=["preprocessed_text"])  #
+    df = df.drop_duplicates(subset=["preprocessed_text"])  # 重複を削除
     preprocessed_word_lists: list[C4WordList] = [
         make_word_list(C4Id(**row["id_data"]), row["doc_sentence"], row["sequence_number"]) for _, row in df.iterrows()
     ]
