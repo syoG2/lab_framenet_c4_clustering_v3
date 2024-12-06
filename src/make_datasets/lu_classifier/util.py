@@ -29,13 +29,21 @@ def preprocess_data(
         data["target_word"],
         return_tensors="pt",
         return_special_tokens_mask=True,
+        return_offsets_mapping=True,  # FastTokenizerを使用する必要がある
     )  # [CLS] 文　[SEP] 注目語　[SEP]
     inputs = {k: v.squeeze(0) for k, v in inputs.items()}
 
-    # targetが単語単位で指定されているので、textを単語に分割する
-    words = data["preprocessed_text"].split()
-    tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"])
-    word_to_token_indices, _ = get_alignments(words, tokens)
+    char_to_token = [[] for _ in range(len(data["preprocessed_text"]))]
+    token_to_char = [[] for _ in range(len(inputs["input_ids"]))]
+    for idx, ((start, end), id) in enumerate(zip(inputs["offset_mapping"], inputs["input_ids"], strict=True)):
+        if id == tokenizer.sep_token_id:
+            break
+
+        for i in range(start, end):
+            char_to_token[i].append(idx)
+            token_to_char[idx].append(i)
+
+    del inputs["offset_mapping"]
 
     if prediction:  # 推論をする場合はラベルを作成しない
         return inputs
@@ -43,12 +51,12 @@ def preprocess_data(
     # 学習時に必要な正解ラベルを作成(トークンレベル)
     # 全て0のラベルを作成
     labels = torch.zeros_like(inputs["input_ids"])
-    for entity in data["preprocessed_target_widx"]:
+    for entity in data["preprocessed_lu_idx"]:
         # entityには単語レベルでの開始位置と終了位置が格納されている
-        start_token_indices = word_to_token_indices[entity[0]]
-        end_token_indices = word_to_token_indices[entity[-1]]
+        start_token = char_to_token[entity[0]]
+        end_token = char_to_token[entity[-1] - 1]
 
-        start, end = start_token_indices[0], end_token_indices[-1]
+        start, end = start_token[0], end_token[-1]
         entity_type = "B-lu"
         # start,endのインデックスのどちらも含む範囲にラベルを設定
         labels[start : end + 1] = label2id[entity_type]
@@ -95,22 +103,22 @@ def extract_entities(
     results = []
     for prediction, data in zip(predictions, dataset, strict=True):
         # 文字のlistを取得する
-        words = data["preprocessed_text"].split()
+        chars = list(data["preprocessed_text"])
 
         # 特殊トークンを除いたトークンのlistと予測ラベルのlistを取得する
         tokens, pred_labels = [], []
         all_tokens = tokenizer.convert_ids_to_tokens(prediction["input_ids"])
         for token, label_id in zip(all_tokens, prediction["pred_label_ids"], strict=True):
-            # 特殊トークン以外をlistに追加する
-            if token == tokenizer.sep_token_id:
+            if token == tokenizer.sep_token:
                 # [SEP]トークンが出たら終了([SEP]トークン以降は注目動詞となっている)
                 break
+            # 特殊トークン以外をlistに追加する
             if token not in tokenizer.all_special_tokens:
                 tokens.append(token)
                 pred_labels.append(id2label[label_id])
 
         # 文字のlistとトークンのlistのアライメントをとる
-        _, token_to_word_indices = get_alignments(words, tokens)
+        _, token_to_word_indices = get_alignments(chars, tokens)
 
         # 予測ラベルのlistから固有表現タイプと、
         # トークン単位の開始位置と終了位置を取得して、
@@ -119,16 +127,23 @@ def extract_entities(
         for i, pred_label in enumerate(pred_labels):
             if pred_label == "B-lu":
                 idxs = token_to_word_indices[i]
-                for id in idxs:
-                    if pred_entities == [] or pred_entities[-1][-1] != id:
-                        pred_entities.append([id, id])
-                    # if id > len(words):
-                    #     print(f"Error: {id} > {len(words)}")
-                    #     print(words)
-                    #     print(all_tokens)
-                    #     print(pred_labels)
+                # TODO:エラーが起きたり起きなかったりする
+                try:
+                    if pred_entities == [] or pred_entities[-1][-1] != idxs[0]:
+                        pred_entities.append([idxs[0], idxs[-1] + 1])
+                    else:
+                        pred_entities[-1][-1] = idxs[-1] + 1
+                except IndexError:
+                    print("IndexError")
+                    print(prediction)
+                    print(data)
+                    print(chars)
+                    print(tokens)
+                    print(all_tokens)
+                    print(i)
+                    print(token_to_word_indices)
 
-        data["pred_target_widx"] = pred_entities
+        data["pred_lu_idx"] = pred_entities
         results.append(data)
 
     return results
@@ -137,7 +152,7 @@ def extract_entities(
 def create_word_labels(text: str, entities: list[list[int]]) -> list[str]:
     """単語ベースでラベルのlistを作成"""
     # "O"のラベルで初期化したラベルのlistを作成する
-    labels = ["O"] * len(text.split())
+    labels = ["O"] * len(text)
     for entity in entities:
         for i in range(entity[0], entity[1] + 1):
             labels[i] = "B-lu"
@@ -149,8 +164,8 @@ def convert_results_to_labels(results: list[dict[str, Any]]) -> tuple[list[list[
     true_labels, pred_labels = [], []
     for result in results:  # 各事例を処理する
         # 文字ベースでラベルのリストを作成してlistに加える
-        true_labels.append(create_word_labels(result["preprocessed_text"], result["preprocessed_target_widx"]))
-        pred_labels.append(create_word_labels(result["preprocessed_text"], result["pred_target_widx"]))
+        true_labels.append(create_word_labels(result["preprocessed_text"], result["preprocessed_lu_idx"]))
+        pred_labels.append(create_word_labels(result["preprocessed_text"], result["pred_lu_idx"]))
     return true_labels, pred_labels
 
 
