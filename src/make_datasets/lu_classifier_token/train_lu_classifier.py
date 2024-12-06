@@ -30,7 +30,9 @@ class Args(BaseModel):
 
     def model_post_init(self, __context):
         if self.output_model_dir == Path(""):
-            self.output_model_dir = Path(f"./src/make_datasets/lu_classifier_token/models/{self.pretrained_model}")
+            self.output_model_dir = Path(
+                f"./src/make_datasets/lu_classifier_token/models/{self.pretrained_model}/{self.n_splits}_{self.part}"
+            )
 
 
 def main():
@@ -222,7 +224,7 @@ def main():
     for lu_len_score in lu_len_scores:
         correct = lu_len_scores[lu_len_score]["correct"]
         size = lu_len_scores[lu_len_score]["size"]
-        lu_len_scores[lu_len_score] = correct / size
+        lu_len_scores[lu_len_score]["acc"] = correct / size
 
     print(lu_len_scores)
 
