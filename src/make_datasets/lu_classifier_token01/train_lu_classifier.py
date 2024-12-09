@@ -27,8 +27,9 @@ class Args(BaseModel):
     seed: int = 42
 
     def model_post_init(self, __context):
+        wd = Path(__file__)
         if self.output_model_dir == Path(""):
-            self.output_model_dir = Path(f"./src/make_datasets/lu_classifier_token01/models/{self.pretrained_model}")
+            self.output_model_dir = wd.parent / f"models/{self.pretrained_model}"
 
 
 def main():

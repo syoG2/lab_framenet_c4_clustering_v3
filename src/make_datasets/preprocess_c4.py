@@ -5,7 +5,7 @@ import pandas as pd
 import stanza
 from base import BaseData, WordInfo, WordList
 from collect_c4 import C4Id
-from lu_classifier.util import extract_entities, id2label, label2id, preprocess_data, run_prediction
+from lu_classifier_sep.util import extract_entities, id2label, label2id, preprocess_data, run_prediction
 from omegaconf import OmegaConf
 from pydantic import BaseModel
 from spacy_alignments import get_alignments
@@ -41,9 +41,9 @@ class Args(BaseModel):
         if self.output_wordlist_file == Path(""):
             self.output_wordlist_file = output_dir / Path(f"word_list_{self.part_id}.jsonl")
         if self.model_path == Path(""):
-            self.model_path = Path(f"./src/make_datasets/lu_classifier/models/{self.model_name}/best_model")
+            self.model_path = Path(f"./src/make_datasets/lu_classifier_sep/models/{self.model_name}/best_model")
         if self.tokenizer_path == Path(""):
-            self.tokenizer_path = Path(f"./src/make_datasets/lu_classifier/models/{self.model_name}/tokenizer")
+            self.tokenizer_path = Path(f"./src/make_datasets/lu_classifier_sep/models/{self.model_name}/tokenizer")
 
 
 def get_pred_lu_name(preprocessed_text, doc_sentence, pred_lu_idx):

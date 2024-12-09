@@ -43,7 +43,7 @@ def main():
 
     # データの読み込み
     df = pd.read_json(args.input_file, orient="records", lines=True)
-    df = df[["target_word", "preprocessed_text", "preprocessed_lu_idx", "target_word_idx", "lu_name"]]
+    df = df[["target_word", "preprocessed_text", "preprocessed_lu_idx", "lu_name"]]
 
     # # データのシャッフル
     # df = df.sample(frac=1, random_state=0).reset_index(drop=True)
@@ -58,7 +58,7 @@ def main():
     df_lu_single = df[df["preprocessed_lu_idx"].apply(len) == 1]
     df_lu_multi = df[df["preprocessed_lu_idx"].apply(len) > 1]
 
-    # "lu_name"でグループ化し、数が多い順にソート
+    # "lu_name"でグループ化し、数が少ない順にソート
     lu_name_single_counts = df_lu_single["lu_name"].value_counts()
     df_lu_single_list: pd.DataFrame = [pd.DataFrame() for _ in range(args.n_splits)]
     # ソートされた順にfor文を回す
@@ -69,7 +69,7 @@ def main():
         )
     df_lu_single_list.sort(key=len)
 
-    # "lu_name"でグループ化し、数が多い順にソート
+    # "lu_name"でグループ化し、数が少ない順にソート
     lu_name_multi_counts = df_lu_multi["lu_name"].value_counts()
     df_lu_multi_list: pd.DataFrame = [pd.DataFrame() for _ in range(args.n_splits)]
     # ソートされた順にfor文を回す
@@ -90,12 +90,8 @@ def main():
 
     # トークナイザーとモデルの準備
     tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model)
-    # カスタムトークン[unused0]を追加
-    tokenizer.add_special_tokens({"additional_special_tokens": [tokenizer.convert_ids_to_tokens(1)]})
 
     model = AutoModelForTokenClassification.from_pretrained(args.pretrained_model, label2id=label2id, id2label=id2label)
-    # モデルのエンベディング層をリサイズ
-    model.resize_token_embeddings(len(tokenizer))
 
     for param in model.parameters():
         param.data = param.data.contiguous()

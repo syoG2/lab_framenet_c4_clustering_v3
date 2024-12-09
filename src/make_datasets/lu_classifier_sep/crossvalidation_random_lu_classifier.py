@@ -30,7 +30,7 @@ class Args(BaseModel):
     def model_post_init(self, __context):
         if self.output_model_dir == Path(""):
             self.output_model_dir = Path(
-                f"./src/make_datasets/lu_classifier/models/{self.pretrained_model}/{self.n_splits}_{self.part}"
+                f"./src/make_datasets/lu_classifier_sep/models/{self.pretrained_model}/random/{self.n_splits}_{self.part}"
             )
 
 
@@ -59,24 +59,16 @@ def main():
     df_lu_single = df[df["preprocessed_lu_idx"].apply(len) == 1]
     df_lu_multi = df[df["preprocessed_lu_idx"].apply(len) > 1]
 
-    # "lu_name"でグループ化し、数が少ない順にソート
-    lu_name_single_counts = df_lu_single["lu_name"].value_counts()
+    df_lu_single = df_lu_single.sample(frac=1, random_state=0).reset_index(drop=True)
     df_lu_single_list: pd.DataFrame = [pd.DataFrame() for _ in range(args.n_splits)]
-    # ソートされた順にfor文を回す
-    for lu_name in lu_name_single_counts.index:
-        df_lu_single_list.sort(key=len)
-        df_lu_single_list[0] = pd.concat(
-            [df_lu_single_list[0], df_lu_single[df_lu_single["lu_name"] == lu_name]], ignore_index=True
-        )
+    for i in range(args.n_splits):
+        df_lu_single_list[i] = df_lu_single.iloc[i :: args.n_splits].reset_index(drop=True)
     df_lu_single_list.sort(key=len)
 
-    # "lu_name"でグループ化し、数が少ない順にソート
-    lu_name_multi_counts = df_lu_multi["lu_name"].value_counts()
+    df_lu_multi = df_lu_multi.sample(frac=1, random_state=0).reset_index(drop=True)
     df_lu_multi_list: pd.DataFrame = [pd.DataFrame() for _ in range(args.n_splits)]
-    # ソートされた順にfor文を回す
-    for lu_name in lu_name_multi_counts.index:
-        df_lu_multi_list.sort(key=len)
-        df_lu_multi_list[0] = pd.concat([df_lu_multi_list[0], df_lu_multi[df_lu_multi["lu_name"] == lu_name]], ignore_index=True)
+    for i in range(args.n_splits):
+        df_lu_multi_list[i] = df_lu_multi.iloc[i :: args.n_splits].reset_index(drop=True)
     df_lu_multi_list.sort(key=len, reverse=True)
 
     df_list = [pd.concat([df_lu_single_list[i], df_lu_multi_list[i]], ignore_index=True) for i in range(args.n_splits)]
