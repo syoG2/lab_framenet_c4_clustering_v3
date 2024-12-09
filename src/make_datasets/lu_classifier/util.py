@@ -18,6 +18,7 @@ id2label = {v: k for k, v in label2id.items()}
 
 
 # TODO: token数が多すぎるdataを省くべきか?
+# FrameNetをbert-base-uncasedでtokenizeした場合、token数が512を超える事例はなかった
 def preprocess_data(
     data: dict[str, Any],
     tokenizer: PreTrainedTokenizer,
