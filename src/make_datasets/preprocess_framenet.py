@@ -24,17 +24,9 @@ class Args(BaseModel):
 
 class FramenetData(BaseData):
     # 前処理後のframenet
-    # source: str  # データの取得元(e.g. framenet)
     id_data: FramenetId  # 元データの参照に必要な情報を格納
-    # target_word: str  # 注目する語(text内に現れる形)
-    # target_word_idx: list[int]  # 注目する語の位置(文字レベル)[開始位置,終了位置]
-    # preprocessed_text: str  # 前処理後のtext
-    # preprocessed_lu_idx: list[list[int]]  # 前処理後のLUの位置(文字レベル)[開始位置,終了位置]
-    # text: str  # 前処理前のtext
-    # uuid: UUID = Field(default_factory=lambda: uuid4())  # 分割後のデータに対して一意に与える
     frame_name: str
     frame_id: int
-    lu_name: str
     lu_id: int
     fe_idx: list[
         list[list[int | str]] | dict[str, str]

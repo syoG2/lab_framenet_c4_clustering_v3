@@ -41,9 +41,9 @@ class Args(BaseModel):
         if self.output_wordlist_file == Path(""):
             self.output_wordlist_file = output_dir / Path(f"word_list_{self.part_id}_token.jsonl")
         if self.model_path == Path(""):
-            self.model_path = Path(f"./src/make_datasets/lu_classifier_token/models/{self.model_name}/best_model")
+            self.model_path = Path(f"./src/make_datasets/lu_classifier_token/models/{self.model_name}/5_3/best_model")
         if self.tokenizer_path == Path(""):
-            self.tokenizer_path = Path(f"./src/make_datasets/lu_classifier_token/models/{self.model_name}/tokenizer")
+            self.tokenizer_path = Path(f"./src/make_datasets/lu_classifier_token/models/{self.model_name}/5_3/tokenizer")
 
 
 def get_pred_lu_name(preprocessed_text, doc_sentence, pred_lu_idx):
@@ -69,15 +69,8 @@ def get_target_word_idxs(preprocessed_text, doc_sentence):
 
 
 class C4Data(BaseData):
-    # source: str  # データの取得元(e.g. framenet)
     id_data: C4Id  # 元データの参照に必要な情報を格納
-    # target_word: str  # 注目する語(基本形)
-    # text: str  # 前処理前のtext
-    # preprocessed_text: str  # 前処理後のtext
-    # preprocessed_target_widx: list[int]  # 前処理後のLUの位置(単語レベル)[開始位置,終了位置,主となる語の位置(構文木)]
-    # uuid: UUID = Field(default_factory=lambda: uuid4())  # 分割後のデータに対して一意に与える
     part_id: int
-    pred_lu_name: str
 
 
 class C4WordList(WordList):
@@ -212,7 +205,7 @@ def main():
             preprocessed_text=row["preprocessed_text"],
             preprocessed_lu_idx=row["pred_lu_idx"],
             part_id=args.part_id,
-            pred_lu_name=row["pred_lu_name"],
+            lu_name=row["pred_lu_name"],
         )
         for _, row in df.iterrows()
     ]

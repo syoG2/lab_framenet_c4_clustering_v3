@@ -1,15 +1,17 @@
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from omegaconf import OmegaConf
 from pydantic import BaseModel
 
+from sfimwe2sc import BaseEmbedding, BaseNet, write_jsonl
+
 
 class Args(BaseModel):
-    input_file: Path
-    output_exemplar_file: Path
-    output_vec_file: Path
-    pretrained_model_name: str
+    input_file: Path = Path("./datasets/framenet/exemplars.jsonl")
+    output_dir: Path = Path("")
+    pretrained_model_name: str = "bert-base-uncased"
     vec_type: str = "word"
     layer: int = 0
     normalization: bool = False
@@ -17,16 +19,18 @@ class Args(BaseModel):
     device: str = "cuda:0"
     split: str = "dev"
 
+    def model_post_init(self, __context):
+        if self.output_dir == Path(""):
+            self.output_dir = Path(f"./embeddng/{self.pretrained_model_name}/{self.vec_type}/{self.layer}")
+
 
 def main():
     # OmegaConfを用いて実験設定を読み込む
     args = Args(**OmegaConf.from_cli())
     print(args)
-    # outputディレクトリの作成
-    args.output_exemplar_file.parent.mkdir(parents=True, exist_ok=True)
-    args.output_vec_file.parent.mkdir(parents=True, exist_ok=True)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    df = pd.DataFrame(args.input_file)
+    df = pd.read_json(args.input_file, lines=True)
     model = BaseNet(args.pretrained_model_name, args.normalization, args.device, args.layer)
     model.to(args.device).eval()
 

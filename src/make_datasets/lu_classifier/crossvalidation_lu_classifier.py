@@ -4,7 +4,6 @@ from pathlib import Path
 import pandas as pd
 from omegaconf import OmegaConf
 from pydantic import BaseModel
-from seqeval.metrics import classification_report
 from torch.utils.data import DataLoader
 from transformers import (
     AutoModelForTokenClassification,
@@ -60,7 +59,7 @@ def main():
     df_lu_single = df[df["preprocessed_lu_idx"].apply(len) == 1]
     df_lu_multi = df[df["preprocessed_lu_idx"].apply(len) > 1]
 
-    # "lu_name"でグループ化し、数が多い順にソート
+    # "lu_name"でグループ化し、数が少ない順にソート
     lu_name_single_counts = df_lu_single["lu_name"].value_counts()
     df_lu_single_list: pd.DataFrame = [pd.DataFrame() for _ in range(args.n_splits)]
     # ソートされた順にfor文を回す
@@ -71,7 +70,7 @@ def main():
         )
     df_lu_single_list.sort(key=len)
 
-    # "lu_name"でグループ化し、数が多い順にソート
+    # "lu_name"でグループ化し、数が少ない順にソート
     lu_name_multi_counts = df_lu_multi["lu_name"].value_counts()
     df_lu_multi_list: pd.DataFrame = [pd.DataFrame() for _ in range(args.n_splits)]
     # ソートされた順にfor文を回す
@@ -217,36 +216,37 @@ def main():
         if result["preprocessed_lu_idx"] == result["pred_lu_idx"]:
             lu_len_scores[true_length]["correct"] += 1
 
-    for lu_len_score in lu_len_scores:
-        correct = lu_len_scores[lu_len_score]["correct"]
-        size = lu_len_scores[lu_len_score]["size"]
-        lu_len_scores[lu_len_score]["acc"] = correct / size
+    all_score = {"size": 0, "correct": 0}
+    more_than_2_score = {"size": 0, "correct": 0}
+    for key in lu_len_scores:
+        correct = lu_len_scores[key]["correct"]
+        size = lu_len_scores[key]["size"]
+        lu_len_scores[key]["acc"] = correct / size
 
-    print(lu_len_scores)
+        all_score["size"] += size
+        all_score["correct"] += correct
+        if key > 2:
+            more_than_2_score["size"] += size
+            more_than_2_score["correct"] += correct
 
-    # 正解データと予測データのラベルのlistを作成する
-    true_labels, pred_labels = convert_results_to_labels(results)
-    # 評価結果を出力する
-    print(classification_report(true_labels, pred_labels, digits=6))
+    all_score["acc"] = all_score["correct"] / all_score["size"]
+    more_than_2_score["acc"] = more_than_2_score["correct"] / more_than_2_score["size"]
 
-    # 評価結果を辞書形式で取得する
-    report = classification_report(true_labels, pred_labels, digits=6, output_dict=True)
+    with open(args.output_model_dir / "score.txt", "w") as f:
+        for key, value in sorted(lu_len_scores.items(), key=lambda x: x[0]):
+            print(
+                f"{str(key).rjust(3)}:\tAccuracy=\t{str(round(value['acc'],6)).ljust(9)}=\t{str(value['correct']).rjust(6)}/{str(value['size']).rjust(6)}",
+                file=f,
+            )
 
-    # 分母と分子を表示する
-    for label, metrics in report.items():
-        if isinstance(metrics, dict):
-            precision = metrics.get("precision", 0)
-            recall = metrics.get("recall", 0)
-            support = metrics.get("support", 0)
-
-            # 分母と分子を計算
-            recall_numerator = recall * support
-            precision_denominator = recall_numerator / precision
-
-            print(f"Label: {label}")
-            print(f"Precision: {precision} (Numerator: {recall_numerator}, Denominator: {precision_denominator})")
-            print(f"Recall: {recall} (Numerator: {recall_numerator}, Denominator: {support})")
-            print()
+        print(
+            f"{">2".rjust(3)}:\tAccuracy=\t{str(round(more_than_2_score['acc'],6)).ljust(9)}=\t{str(more_than_2_score['correct']).rjust(6)}/{str(more_than_2_score['size']).rjust(6)}",
+            file=f,
+        )
+        print(
+            f"{"all".rjust(3)}:\tAccuracy=\t{str(round(all_score['acc'],6)).ljust(9)}=\t{str(all_score['correct']).rjust(6)}/{str(all_score['size']).rjust(6)}",
+            file=f,
+        )
 
 
 if __name__ == "__main__":

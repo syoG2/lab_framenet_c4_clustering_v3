@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class BaseData(BaseModel):
     source: str  # データの取得元(e.g. framenet)
     id_data: object  # 元データの参照に必要な情報を格納
+    lu_name: str  # LUの名前(.v)を含む(予測されたLUの名前が格納されることもありうる)
     target_word: str  # 注目する語(text内に現れる形)
     target_word_idx: list[int]  # 注目する語の位置(文字レベル)[開始位置,終了位置]
     preprocessed_text: str  # 前処理後のtext
