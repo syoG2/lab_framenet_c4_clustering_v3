@@ -1,5 +1,5 @@
 [project]
-name = "lab-framenet-c4-clustering-v2"
+name = "lab-framenet-c4-clustering-v3"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -7,10 +7,13 @@ requires-python = ">=3.12"
 dependencies = [
     "accelerate>=1.1.1",
     "datasets>=3.0.2",
+    "fastcluster>=1.2.6",
     "jupyter>=1.1.1",
     "nltk>=3.9.1",
     "normalize>=2.1.0",
+    "numpy<2",
     "omegaconf>=2.3.0",
+    "pyclustering>=0.10.1.2",
     "pydantic>=2.9.2",
     "ruff>=0.7.0",
     "scikit-learn>=1.5.2",
