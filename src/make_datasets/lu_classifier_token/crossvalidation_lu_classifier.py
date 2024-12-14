@@ -30,7 +30,14 @@ class Args(BaseModel):
     def model_post_init(self, __context):
         wd = Path(__file__)
         if self.output_model_dir == Path(""):
-            self.output_model_dir = wd.parent / f"models/{self.pretrained_model}/{self.n_splits}_{self.part}"
+            self.output_model_dir = wd.parent / f"models/{self.pretrained_model}/lu/{self.n_splits}_{self.part}"
+
+
+class Score(BaseModel):
+    lu_size: int  # LUの単語数
+    acc: float
+    correct: int
+    size: int
 
 
 def main():
@@ -58,7 +65,7 @@ def main():
     df_lu_single = df[df["preprocessed_lu_idx"].apply(len) == 1]
     df_lu_multi = df[df["preprocessed_lu_idx"].apply(len) > 1]
 
-    # "lu_name"でグループ化し、数が多い順にソート
+    # "lu_name"でグループ化し、数が少ない順にソート
     lu_name_single_counts = df_lu_single["lu_name"].value_counts()
     df_lu_single_list: pd.DataFrame = [pd.DataFrame() for _ in range(args.n_splits)]
     # ソートされた順にfor文を回す
@@ -69,7 +76,7 @@ def main():
         )
     df_lu_single_list.sort(key=len)
 
-    # "lu_name"でグループ化し、数が多い順にソート
+    # "lu_name"でグループ化し、数が少ない順にソート
     lu_name_multi_counts = df_lu_multi["lu_name"].value_counts()
     df_lu_multi_list: pd.DataFrame = [pd.DataFrame() for _ in range(args.n_splits)]
     # ソートされた順にfor文を回す
@@ -219,37 +226,19 @@ def main():
         if result["preprocessed_lu_idx"] == result["pred_lu_idx"]:
             lu_len_scores[true_length]["correct"] += 1
 
-    all_score = {"size": 0, "correct": 0}
-    more_than_2_score = {"size": 0, "correct": 0}
-    for key in lu_len_scores:
-        correct = lu_len_scores[key]["correct"]
-        size = lu_len_scores[key]["size"]
-        lu_len_scores[key]["acc"] = correct / size
-
-        all_score["size"] += size
-        all_score["correct"] += correct
-        if key > 2:
-            more_than_2_score["size"] += size
-            more_than_2_score["correct"] += correct
-
-    all_score["acc"] = all_score["correct"] / all_score["size"]
-    more_than_2_score["acc"] = more_than_2_score["correct"] / more_than_2_score["size"]
-
-    with open(args.output_model_dir / "score.txt", "w") as f:
-        for key, value in sorted(lu_len_scores.items(), key=lambda x: x[0]):
-            print(
-                f"{str(key).rjust(3)}:\tAccuracy=\t{str(round(value['acc'],6)).ljust(9)}=\t{str(value['correct']).rjust(6)}/{str(value['size']).rjust(6)}",
-                file=f,
-            )
-
-        print(
-            f"{">2".rjust(3)}:\tAccuracy=\t{str(round(more_than_2_score['acc'],6)).ljust(9)}=\t{str(more_than_2_score['correct']).rjust(6)}/{str(more_than_2_score['size']).rjust(6)}",
-            file=f,
+    scores: list[Score] = [
+        Score(
+            lu_size=key,
+            acc=value["correct"] / value["size"],
+            correct=value["correct"],
+            size=value["size"],
         )
-        print(
-            f"{"all".rjust(3)}:\tAccuracy=\t{str(round(all_score['acc'],6)).ljust(9)}=\t{str(all_score['correct']).rjust(6)}/{str(all_score['size']).rjust(6)}",
-            file=f,
-        )
+        for key, value in sorted(lu_len_scores.items(), key=lambda x: x[0])
+    ]
+
+    with open(args.output_model_dir / "score.jsonl", "w") as f:
+        for score in scores:
+            print(score.model_dump_json(), file=f)
 
 
 if __name__ == "__main__":
