@@ -21,7 +21,7 @@ class Args(BaseModel):
 
     def model_post_init(self, __context):
         if self.output_dir == Path(""):
-            self.output_dir = Path(f"./embeddng/{self.pretrained_model_name}/{self.vec_type}/{self.layer}")
+            self.output_dir = Path(f"./embedding/{self.pretrained_model_name}/{self.vec_type}/{self.layer}")
 
 
 def main():
