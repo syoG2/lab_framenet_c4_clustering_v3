@@ -50,7 +50,7 @@ def main():
 
     # データの読み込み
     df = pd.read_json(args.input_file, orient="records", lines=True)
-    df = df[["target_word", "preprocessed_text", "preprocessed_lu_idx", "lu_name"]]
+    df = df[["target_word", "preprocessed_text", "preprocessed_lu_idx", "target_word_idx", "lu_name"]]
 
     # # データのシャッフル
     # df = df.sample(frac=1, random_state=0).reset_index(drop=True)
@@ -89,8 +89,12 @@ def main():
 
     # トークナイザーとモデルの準備
     tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model)
+    # カスタムトークン[unused0]を追加
+    tokenizer.add_special_tokens({"additional_special_tokens": [tokenizer.convert_ids_to_tokens(1)]})
 
     model = AutoModelForTokenClassification.from_pretrained(args.pretrained_model, label2id=label2id, id2label=id2label)
+    # モデルのエンベディング層をリサイズ
+    model.resize_token_embeddings(len(tokenizer))
 
     for param in model.parameters():
         param.data = param.data.contiguous()
