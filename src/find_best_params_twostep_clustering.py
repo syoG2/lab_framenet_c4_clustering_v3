@@ -16,7 +16,7 @@ class Args(BaseModel):
     clustering_method2: str
 
 
-def main(args):
+def main():
     fix_seed(0)
     args = Args(**OmegaConf.from_cli())
     args.output_dir.mkdir(parents=True, exist_ok=True)

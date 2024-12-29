@@ -17,7 +17,6 @@ label2id = {"O": 0, "B-lu": 1}
 id2label = {v: k for k, v in label2id.items()}
 
 
-# TODO: token数が多すぎるdataを省くべきか?
 # FrameNetをbert-base-uncasedでtokenizeした場合、token数が512を超える事例はなかった
 def preprocess_data(
     data: dict[str, Any],
@@ -128,21 +127,10 @@ def extract_entities(
         for i, pred_label in enumerate(pred_labels):
             if pred_label == "B-lu":
                 idxs = token_to_word_indices[i]
-                # TODO:エラーが起きたり起きなかったりする
-                try:
-                    if pred_entities == [] or pred_entities[-1][-1] != idxs[0]:
-                        pred_entities.append([idxs[0], idxs[-1] + 1])
-                    else:
-                        pred_entities[-1][-1] = idxs[-1] + 1
-                except IndexError:
-                    print("IndexError")
-                    print(prediction)
-                    print(data)
-                    print(chars)
-                    print(tokens)
-                    print(all_tokens)
-                    print(i)
-                    print(token_to_word_indices)
+                if pred_entities == [] or pred_entities[-1][-1] != idxs[0]:
+                    pred_entities.append([idxs[0], idxs[-1] + 1])
+                else:
+                    pred_entities[-1][-1] = idxs[-1] + 1
 
         data["pred_lu_idx"] = pred_entities
         results.append(data)

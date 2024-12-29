@@ -30,7 +30,7 @@ class Args(BaseModel):
     def model_post_init(self, __context):
         wd = Path(__file__)
         if self.output_model_dir == Path(""):
-            self.output_model_dir = wd.parent / f"models/{self.pretrained_model}/random/{self.seed}/{self.n_splits}_{self.part}"
+            self.output_model_dir = wd.parent / f"models/{self.pretrained_model}/best/{self.seed}/{self.n_splits}_{self.part}"
 
 
 class Score(BaseModel):
@@ -38,9 +38,6 @@ class Score(BaseModel):
     acc: float
     correct: int
     size: int
-    sep_acc: float
-    sep_correct: int
-    sep_size: int
 
 
 def main():
@@ -84,11 +81,10 @@ def main():
 
     # データセットの作成
     train_dataset = Dataset.from_pandas(
-        pd.concat([df_list[(args.part + i) % args.n_splits] for i in range(args.n_splits - 2)], ignore_index=True)
+        pd.concat([df_list[(args.part + i) % args.n_splits] for i in range(args.n_splits - 1)], ignore_index=True)
     )
-    test_dataset = Dataset.from_pandas(df_list[(args.part + args.n_splits - 2) % args.n_splits])
     validation_dataset = Dataset.from_pandas(df_list[(args.part + args.n_splits - 1) % args.n_splits])
-    dataset = DatasetDict({"train": train_dataset, "test": test_dataset, "validation": validation_dataset})
+    dataset = DatasetDict({"train": train_dataset, "validation": validation_dataset})
 
     # トークナイザーとモデルの準備
     tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model)
@@ -188,66 +184,6 @@ def main():
     # 保存したトークナイザーとモデルを読み込む
     tokenizer = AutoTokenizer.from_pretrained(args.output_model_dir / "tokenizer")
     best_model = AutoModelForTokenClassification.from_pretrained(args.output_model_dir / "best_model")
-
-    test_dataset = dataset["test"].map(
-        preprocess_data,
-        fn_kwargs={
-            "tokenizer": tokenizer,
-            "label2id": label2id,
-        },
-        remove_columns=dataset["test"].column_names,
-    )
-    # ミニバッチの作成にDataLoaderを用いる
-    test_dataloader = DataLoader(
-        test_dataset,
-        batch_size=32,
-        shuffle=False,
-        collate_fn=data_collator,
-    )
-    # 固有表現ラベルを予測する
-    predictions = run_prediction(test_dataloader, best_model)
-
-    # 固有表現を抽出する
-    results = extract_entities(predictions, dataset["test"], tokenizer, id2label)
-
-    # LUの単語数ごとの正解率を計算する
-    lu_len_scores = {}
-    for result in results:
-        true_length = len(result["preprocessed_lu_idx"])
-        if true_length not in lu_len_scores:
-            lu_len_scores[true_length] = {"size": 0, "correct": 0, "sep_correct": 0, "sep_size": 0}
-
-        lu_len_scores[true_length]["size"] += 1
-        if result["preprocessed_lu_idx"] == result["pred_lu_idx"]:
-            lu_len_scores[true_length]["correct"] += 1
-
-        is_sep = False
-        for i in range(len(result["preprocessed_lu_idx"]) - 1):
-            if result["preprocessed_lu_idx"][i][-1] + 1 != result["preprocessed_lu_idx"][i + 1][0]:
-                is_sep = True
-                break
-
-        if is_sep:
-            lu_len_scores[true_length]["sep_size"] += 1
-            if result["preprocessed_lu_idx"] == result["pred_lu_idx"]:
-                lu_len_scores[true_length]["sep_correct"] += 1
-
-    scores: list[Score] = [
-        Score(
-            lu_size=key,
-            acc=value["correct"] / value["size"],
-            correct=value["correct"],
-            size=value["size"],
-            sep_acc=value["sep_correct"] / value["sep_size"] if value["sep_size"] != 0 else -1,
-            sep_correct=value["sep_correct"],
-            sep_size=value["sep_size"],
-        )
-        for key, value in sorted(lu_len_scores.items(), key=lambda x: x[0])
-    ]
-
-    with open(args.output_model_dir / "score.jsonl", "w") as f:
-        for score in scores:
-            print(score.model_dump_json(), file=f)
 
 
 if __name__ == "__main__":

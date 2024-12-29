@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from omegaconf import OmegaConf
@@ -9,10 +10,14 @@ from sfimwe2sc import OnestepClustering, calculate_bcubed, fix_seed, read_embedd
 
 class Args(BaseModel):
     input_dir: Path = Path("./embedding/bert-base-uncased")
-    output_dir: Path = Path("./params/bert-base-uncased")
+    output_dir: Path = Path("")
     vec_type: str = "word"
     layers: list[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     clustering_method: str = "average"
+
+    def model_post_init(self, __context):
+        if self.output_dir == Path(""):
+            self.output_dir = Path(f"./params/bert-base-uncased/{self.vec_type}/onestep_{self.clustering_method}")
 
 
 def main():
@@ -42,9 +47,8 @@ def main():
             params = clustering.make_params(df_vec, vec_array)
             df_output = clustering.step(df_vec, vec_array, params)
 
-            # TODO: ex_idxは使っていない。id_dataが使えるなら使う
-            true = df_output.groupby("frame")["ex_idx"].agg(list).tolist()
-            pred = df_output.groupby("frame_cluster")["ex_idx"].agg(list).tolist()
+            true = df_output.groupby("frame_name")["uuid"].agg(list).tolist()
+            pred = df_output.groupby("frame_cluster")["uuid"].agg(list).tolist()
             bcf = calculate_bcubed(true, pred)[2]
             if best_bcf < bcf:
                 best_bcf = bcf
@@ -57,8 +61,8 @@ def main():
             params = clustering.make_params(df_vec, vec_array)
             df_output = clustering.step(df_vec, vec_array, params)
 
-            true = df_output.groupby("frame")["ex_idx"].agg(list).tolist()
-            pred = df_output.groupby("frame_cluster")["ex_idx"].agg(list).tolist()
+            true = df_output.groupby("frame_name")["uuid"].agg(list).tolist()
+            pred = df_output.groupby("frame_cluster")["uuid"].agg(list).tolist()
             bcf = calculate_bcubed(true, pred)[2]
             if best_bcf < bcf:
                 best_bcf = bcf
@@ -73,7 +77,7 @@ def main():
     best_params["clustering_method"] = args.clustering_method
 
     with open(args.output_dir / "best_params.json", "w") as f:
-        print(best_params, file=f)
+        json.dump(best_params, f)
     # write_json(best_params, args.output_dir / "best_params.json")
 
 

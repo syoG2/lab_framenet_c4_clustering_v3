@@ -9,7 +9,7 @@ from sfimwe2sc import BaseEmbedding, BaseNet, write_jsonl
 
 
 class Args(BaseModel):
-    input_file: Path = Path("./datasets/framenet/exemplars.jsonl")
+    input_file: Path = Path("")
     output_dir: Path = Path("")
     pretrained_model_name: str = "bert-base-uncased"
     vec_type: str = "word"
@@ -20,6 +20,8 @@ class Args(BaseModel):
     split: str = "dev"
 
     def model_post_init(self, __context):
+        if self.input_file == Path(""):
+            self.input_file = Path(f"./datasets/merged/exemplars_{self.split}.jsonl")
         if self.output_dir == Path(""):
             self.output_dir = Path(f"./embedding/{self.pretrained_model_name}/{self.vec_type}/{self.layer}")
 

@@ -168,6 +168,7 @@ class BaseNet(nn.Module):
             )["hidden_states"][self.layer]
 
         inputs["target_tidx"] = torch.transpose(inputs["target_tidx"], 0, 1).to(self.device)  # 転置
+
         embeddings = hidden_states[
             torch.LongTensor(range(inputs["target_tidx"].size()[1])),
             inputs["target_tidx"],
@@ -185,16 +186,16 @@ class BaseNet(nn.Module):
 
 def read_embedding(vec_dir, split, vec_type2run_number, alpha):
     if alpha == 0:
-        dir1 = vec_dir / "word" / vec_type2run_number["word"]
+        dir1 = vec_dir / "word" / str(vec_type2run_number["word"])
         vec_array = np.load(dir1 / f"vec_{split}.npz", allow_pickle=True)["vec"]
         ex_file = dir1 / f"exemplars_{split}.jsonl"
     elif alpha == 1:
-        dir1 = vec_dir / "mask" / vec_type2run_number["mask"]
+        dir1 = vec_dir / "mask" / str(vec_type2run_number["mask"])
         vec_array = np.load(dir1 / f"vec_{split}.npz", allow_pickle=True)["vec"]
         ex_file = dir1 / f"exemplars_{split}.jsonl"
     else:
-        dir1 = vec_dir / "word" / vec_type2run_number["word"]
-        dir2 = vec_dir / "mask" / vec_type2run_number["mask"]
+        dir1 = vec_dir / "word" / str(vec_type2run_number["word"])
+        dir2 = vec_dir / "mask" / str(vec_type2run_number["mask"])
         word_array = np.load(dir1 / f"vec_{split}.npz", allow_pickle=True)["vec"]
         mask_array = np.load(dir2 / f"vec_{split}.npz", allow_pickle=True)["vec"]
         vec_array = word_array * (1 - alpha) + mask_array * alpha
@@ -210,7 +211,7 @@ class OnestepClustering:
     def make_params(self, df, vec_array):
         params = {}
         z = linkage(pdist(vec_array), method=self.clustering, preserve_input=False)
-        # params["th"] = z[-len(set(df["frame"])) + 1][2] + 1e-6 # TODO: frame_nameで機能するか確認
+        # params["th"] = z[-len(set(df["frame"])) + 1][2] + 1e-6
         params["th"] = z[-len(set(df["frame_name"])) + 1][2] + 1e-6
         return params
 
@@ -396,3 +397,13 @@ class TwostepClustering:
         map_1to2 = {c1 + 1: c2 for c1, c2 in enumerate(self._clustering_2nd(vec_array_2nd, params))}
         df_2nd["frame_cluster"] = df_2nd["plu_global"].map(map_1to2)
         return df_2nd
+
+
+class OnecpvClustering:
+    def step(self, df):
+        df_list = []
+        for i, verb in enumerate(sorted(set(df["verb"]))):
+            df_verb = df[df["verb"] == verb].copy()
+            df_verb["frame_cluster"] = i + 1
+            df_list.append(df_verb)
+        return pd.concat(df_list, axis=0)

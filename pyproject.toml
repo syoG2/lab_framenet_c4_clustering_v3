@@ -40,7 +40,8 @@ select = [
 ignore = []
 fixable = ["ALL"]
 exclude = [
-    ".ruff_cache"
+    ".ruff_cache",
+    "data"
 ]
 line-length = 130
 indent-width = 4
